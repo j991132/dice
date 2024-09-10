@@ -38,6 +38,7 @@ dependencies:
   shared_preferences: ^2.3.2
   just_audio: ^0.9.40
   reorderable_grid_view: ^2.2.8
+  vector_math: ^2.1.4
 
 dev_dependencies:
   flutter_test:

@@ -1,8 +1,10 @@
 import 'dart:math';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:vector_math/vector_math_64.dart' as vector;
 
 void main() {
   runApp(MaterialApp(home: DiceApp()));
@@ -14,25 +16,28 @@ class DiceApp extends StatefulWidget {
 }
 
 class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
-  List<Dice> dices = [Dice()];
+  late List<Dice> dices;
   final Random random = Random();
-  late AnimationController _controller;
-  late Animation<double> _animation;
   late AudioPlayer _audioPlayer;
   List<String> savedSets = [];
+  FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
+    dices = [
+      Dice(
+        controller: AnimationController(
+          duration: const Duration(milliseconds: 500),
+          vsync: this,
+        ),
+      )
+    ];
     loadDices();
     loadSavedSets();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _audioPlayer = AudioPlayer();
     _loadAudio();
+    _focusNode.requestFocus();
   }
 
   Future<void> _loadAudio() async {
@@ -41,8 +46,11 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _controller.dispose();
     _audioPlayer.dispose();
+    _focusNode.dispose();
+    for (var dice in dices) {
+      dice.controller.dispose();
+    }
     super.dispose();
   }
 
@@ -52,7 +60,14 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     List<int> maxValues = prefs.getStringList('diceMaxValues')?.map(int.parse).toList() ?? [6];
 
     setState(() {
-      dices = List.generate(count, (index) => Dice(maxValue: maxValues[index], color: getRandomColor()));
+      dices = List.generate(count, (index) => Dice(
+        maxValue: maxValues[index],
+        color: getRandomColor(),
+        controller: AnimationController(
+          duration: const Duration(milliseconds: 500),
+          vsync: this,
+        ),
+      ));
     });
   }
 
@@ -72,7 +87,13 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
   void addDice() {
     if (dices.length < 8) {
       setState(() {
-        dices.add(Dice(color: getRandomColor()));
+        dices.add(Dice(
+          color: getRandomColor(),
+          controller: AnimationController(
+            duration: const Duration(milliseconds: 500),
+            vsync: this,
+          ),
+        ));
       });
       saveDices();
     }
@@ -81,15 +102,24 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
   void removeDice() {
     if (dices.length > 1) {
       setState(() {
+        dices.last.controller.dispose();
         dices.removeLast();
       });
       saveDices();
     }
   }
 
-  Future<void> animateDiceRoll(List<Dice> dicesToRoll) async {
-    _controller.reset();
-    _controller.forward();
+  Future<void> rollAllDices() async {
+    List<Future> rollFutures = [];
+    for (var dice in dices) {
+      rollFutures.add(rollDice(dice));
+    }
+    await Future.wait(rollFutures);
+  }
+
+  Future<void> rollDice(Dice dice) async {
+    dice.controller.reset();
+    dice.controller.forward();
 
     await _audioPlayer.stop();
     await _audioPlayer.seek(Duration.zero);
@@ -98,25 +128,13 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     for (int i = 0; i < 10; i++) {
       await Future.delayed(Duration(milliseconds: 50));
       setState(() {
-        for (var dice in dicesToRoll) {
-          dice.tempValue = random.nextInt(dice.maxValue) + 1;
-        }
+        dice.tempValue = random.nextInt(dice.maxValue) + 1;
       });
     }
 
     setState(() {
-      for (var dice in dicesToRoll) {
-        dice.roll();
-      }
+      dice.roll();
     });
-  }
-
-  Future<void> rollDice(Dice dice) async {
-    await animateDiceRoll([dice]);
-  }
-
-  Future<void> rollAllDices() async {
-    await animateDiceRoll(dices);
   }
 
   Color getRandomColor() {
@@ -211,7 +229,17 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     List<dynamic> diceData = set['dices'];
 
     setState(() {
-      dices = diceData.map((d) => Dice(maxValue: d['maxValue'], color: Color(d['color']))).toList();
+      for (var dice in dices) {
+        dice.controller.dispose();
+      }
+      dices = diceData.map((d) => Dice(
+        maxValue: d['maxValue'],
+        color: Color(d['color']),
+        controller: AnimationController(
+          duration: const Duration(milliseconds: 500),
+          vsync: this,
+        ),
+      )).toList();
     });
     saveDices();
   }
@@ -219,146 +247,429 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('주사위 앱'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.save),
-            onPressed: saveCurrentSet,
-          ),
-          IconButton(
-            icon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.add, size: 32),
-                Icon(Icons.casino, size: 32),
-              ],
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        onKey: (RawKeyEvent event) {
+          if (event is RawKeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.space)) {
+            rollAllDices();
+          }
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, Color(0xFFE8F5E9)],
             ),
-            onPressed: addDice,
-            iconSize: 48,
           ),
-          IconButton(
-            icon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.remove, size: 32),
-                Icon(Icons.casino, size: 32),
-              ],
-            ),
-            onPressed: removeDice,
-            iconSize: 48,
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Column(
+          child: Stack(
             children: [
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    int crossAxisCount = 1;
-                    if (dices.length > 1) crossAxisCount = 2;
-                    if (dices.length > 4) crossAxisCount = 3;
+              Column(
+                children: [
+                  AppBar(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    title: Text('주사위 앱', style: TextStyle(color: Colors.black)),
+                    actions: [
+                      IconButton(
+                        icon: Icon(Icons.save, color: Colors.black),
+                        onPressed: saveCurrentSet,
+                      ),
+                      IconButton(
+                        icon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add, size: 32, color: Colors.black),
+                            Icon(Icons.casino, size: 32, color: Colors.black),
+                          ],
+                        ),
+                        onPressed: addDice,
+                        iconSize: 48,
+                      ),
+                      IconButton(
+                        icon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.remove, size: 32, color: Colors.black),
+                            Icon(Icons.casino, size: 32, color: Colors.black),
+                          ],
+                        ),
+                        onPressed: removeDice,
+                        iconSize: 48,
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        int crossAxisCount = 1;
+                        if (dices.length > 1) crossAxisCount = 2;
+                        if (dices.length > 4) crossAxisCount = 3;
 
-                    double availableWidth = constraints.maxWidth - (crossAxisCount + 1) * 8.0;
-                    double availableHeight = constraints.maxHeight - 80; // 버튼을 위한 공간 확보
-                    double diceSize = (availableWidth / crossAxisCount).floorToDouble();
+                        double availableWidth = constraints.maxWidth - (crossAxisCount + 1) * 8.0;
+                        double availableHeight = constraints.maxHeight - 80;
+                        double diceSize = (availableWidth / crossAxisCount).floorToDouble() * 0.8;
 
-                    if (diceSize * ((dices.length / crossAxisCount).ceil()) > availableHeight) {
-                      diceSize = (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble();
-                    }
+                        if (diceSize * ((dices.length / crossAxisCount).ceil()) > availableHeight) {
+                          diceSize = (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble() * 0.8;
+                        }
 
-                    return Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: AnimatedReorderableWrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: dices.asMap().entries.map((entry) {
-                          int index = entry.key;
-                          Dice dice = entry.value;
-                          return DiceWidget(
-                            key: ValueKey(dice),
-                            dice: dice,
-                            size: diceSize,
-                            onMaxValueChanged: (newValue) {
+                        return Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: AnimatedReorderableWrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: dices.asMap().entries.map((entry) {
+                              int index = entry.key;
+                              Dice dice = entry.value;
+                              return DiceWidget3D(
+                                key: ValueKey(dice),
+                                dice: dice,
+                                size: diceSize,
+                                onMaxValueChanged: (newValue) {
+                                  setState(() {
+                                    dice.maxValue = newValue;
+                                  });
+                                  saveDices();
+                                },
+                                onRoll: () => rollDice(dice),
+                              );
+                            }).toList(),
+                            onReorder: (int oldIndex, int newIndex) {
                               setState(() {
-                                dice.maxValue = newValue;
+                                if (newIndex > oldIndex) {
+                                  newIndex -= 1;
+                                }
+                                final Dice item = dices.removeAt(oldIndex);
+                                dices.insert(newIndex, item);
                               });
                               saveDices();
                             },
-                            onRoll: () => rollDice(dice),
-                          );
-                        }).toList(),
-                        onReorder: (int oldIndex, int newIndex) {
-                          setState(() {
-                            if (newIndex > oldIndex) {
-                              newIndex -= 1;
-                            }
-                            final Dice item = dices.removeAt(oldIndex);
-                            dices.insert(newIndex, item);
-                          });
-                          saveDices();
-                        },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 16,
+                child: Center(
+                  child: ElevatedButton(
+                    onPressed: rollAllDices,
+                    child: Text(
+                      '모든 주사위 굴리기',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                  },
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButton<String>(
+                    hint: Text('저장된 Set 불러오기'),
+                    items: savedSets.map((String setJson) {
+                      Map<String, dynamic> set = jsonDecode(setJson);
+                      return DropdownMenuItem<String>(
+                        value: setJson,
+                        child: Text(set['name']),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        loadSet(newValue);
+                      }
+                    },
+                    underline: Container(),
+                  ),
                 ),
               ),
             ],
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 16,
-            child: Center(
-              child: ElevatedButton(
-                onPressed: rollAllDices,
-                child: Text(
-                  '모든 주사위 굴리기',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                ),
-              ),
-            ),
+        ),
+      ),
+    );
+  }
+}
+
+class Dice {
+  int value = 1;
+  int tempValue = 1;
+  int maxValue = 6;
+  Color color;
+  AnimationController controller;
+
+  Dice({
+    this.maxValue = 6,
+    Color? color,
+    required this.controller,
+  }) : color = color ?? Colors.red;
+
+  void roll() {
+    value = Random().nextInt(maxValue) + 1;
+    tempValue = value;
+  }
+}
+
+class DiceWidget3D extends StatelessWidget {
+  final Dice dice;
+  final double size;
+  final Function(int) onMaxValueChanged;
+  final VoidCallback onRoll;
+
+  DiceWidget3D({
+    Key? key,
+    required this.dice,
+    required this.size,
+    required this.onMaxValueChanged,
+    required this.onRoll,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: onRoll,
+          child: AnimatedBuilder(
+            animation: dice.controller,
+            builder: (context, child) {
+              return Transform(
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.001) // 원근감 추가
+                  ..rotateX(dice.controller.value * 2 * pi)
+                  ..rotateY(dice.controller.value * 2 * pi)
+                  ..rotateZ(dice.controller.value * 2 * pi),
+                alignment: Alignment.center,
+                child: CustomPaint(
+                  size: Size(size, size),
+                  painter: DicePainter(
+                    dice: dice,
+                    textColor: getTextColor(dice.color),
           ),
+        ),
+      );
+        },
+        ),
+        ),
           Positioned(
-            right: 16,
-            bottom: 16,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButton<String>(
-                hint: Text('저장된 Set 불러오기'),
-                items: savedSets.map((String setJson) {
-                  Map<String, dynamic> set = jsonDecode(setJson);
-                  return DropdownMenuItem<String>(
-                    value: setJson,
-                    child: Text(set['name']),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    loadSet(newValue);
-                  }
-                },
-                underline: Container(), // 밑줄 제거
-              ),
+            right: 0,
+            top: 0,
+            child: DropdownButton<int>(
+              value: dice.maxValue,
+              items: [4, 6, 8, 10, 12, 20].map((int value) {
+                return DropdownMenuItem<int>(
+                  value: value,
+                  child: Text('$value'),
+                );
+              }).toList(),
+              onChanged: (int? newValue) {
+                if (newValue != null) {
+                  onMaxValueChanged(newValue);
+                }
+              },
+              dropdownColor: dice.color,
+              style: TextStyle(color: getTextColor(dice.color)),
+              underline: Container(),
             ),
           ),
         ],
-      ),
     );
+  }
+
+  Color getTextColor(Color backgroundColor) {
+    double luminance = (0.299 * backgroundColor.red +
+        0.587 * backgroundColor.green +
+        0.114 * backgroundColor.blue) / 255;
+    return luminance > 0.5 ? Colors.black : Colors.white;
+  }
+}
+
+class DicePainter extends CustomPainter {
+  final Dice dice;
+  final Color textColor;
+
+  DicePainter({required this.dice, required this.textColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = dice.color
+      ..style = PaintingStyle.fill;
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.3)
+      ..style = PaintingStyle.fill;
+
+    switch (dice.maxValue) {
+      case 4:
+        _drawTetrahedron(canvas, size, paint, shadowPaint);
+        break;
+      case 6:
+        _drawCube(canvas, size, paint, shadowPaint);
+        break;
+      case 8:
+        _drawOctahedron(canvas, size, paint, shadowPaint);
+        break;
+      case 10:
+        _drawDecahedron(canvas, size, paint, shadowPaint);
+        break;
+      case 12:
+        _drawDodecahedron(canvas, size, paint, shadowPaint);
+        break;
+      case 20:
+        _drawIcosahedron(canvas, size, paint, shadowPaint);
+        break;
+      default:
+        _drawCube(canvas, size, paint, shadowPaint);
+    }
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: dice.tempValue.toString(),
+        style: TextStyle(
+          color: textColor,
+          fontSize: size.width * 0.4,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset(size.width / 2 - textPainter.width / 2, size.height / 2 - textPainter.height / 2));
+  }
+
+  void _drawCube(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
+    final path = Path()
+      ..moveTo(size.width * 0.2, size.height * 0.2)
+      ..lineTo(size.width * 0.8, size.height * 0.2)
+      ..lineTo(size.width * 0.8, size.height * 0.8)
+      ..lineTo(size.width * 0.2, size.height * 0.8)
+      ..close();
+
+    canvas.drawPath(path, paint);
+
+    canvas.drawPath(
+      path.shift(Offset(size.width * 0.1, size.height * 0.1)),
+      shadowPaint,
+    );
+
+    canvas.save();
+    canvas.transform((Matrix4.identity()..rotateZ(-pi / 4)).storage);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width * 0.2, size.height),
+      shadowPaint,
+    );
+    canvas.restore();
+  }
+
+  void _drawTetrahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
+    final path = Path()
+      ..moveTo(size.width * 0.5, size.height * 0.2)
+      ..lineTo(size.width * 0.2, size.height * 0.8)
+      ..lineTo(size.width * 0.8, size.height * 0.8)
+      ..close();
+
+    canvas.drawPath(path, paint);
+
+    canvas.drawPath(
+      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
+      shadowPaint,
+    );
+  }
+
+  void _drawOctahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
+    final path = Path()
+      ..moveTo(size.width * 0.5, size.height * 0.2)
+      ..lineTo(size.width * 0.2, size.height * 0.5)
+      ..lineTo(size.width * 0.5, size.height * 0.8)
+      ..lineTo(size.width * 0.8, size.height * 0.5)
+      ..close();
+
+    canvas.drawPath(path, paint);
+
+    canvas.drawPath(
+      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
+      shadowPaint,
+    );
+  }
+
+  void _drawDecahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
+    final path = Path();
+    for (int i = 0; i < 10; i++) {
+      final angle = i * 2 * pi / 10;
+      final x = size.width / 2 + size.width * 0.4 * cos(angle);
+      final y = size.height / 2 + size.height * 0.4 * sin(angle);
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    canvas.drawPath(
+      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
+      shadowPaint,
+    );
+  }
+
+  void _drawDodecahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
+    final path = Path();
+    for (int i = 0; i < 12; i++) {
+      final angle = i * 2 * pi / 12;
+      final x = size.width / 2 + size.width * 0.45 * cos(angle);
+      final y = size.height / 2 + size.height * 0.45 * sin(angle);
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    canvas.drawPath(
+      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
+      shadowPaint,
+    );
+  }
+
+  void _drawIcosahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
+    final path = Path();
+    for (int i = 0; i < 20; i++) {
+      final angle = i * 2 * pi / 20;
+      final x = size.width / 2 + size.width * 0.48 * cos(angle);
+      final y = size.height / 2 + size.height * 0.48 * sin(angle);
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    canvas.drawPath(
+      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
+      shadowPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
   }
 }
 
@@ -437,109 +748,6 @@ class _AnimatedReorderableWrapState extends State<AnimatedReorderableWrap> {
           ),
         );
       }).toList(),
-    );
-  }
-}
-
-class Dice {
-  int value = 1;
-  int tempValue = 1;
-  int maxValue = 6;
-  Color color;
-
-  Dice({this.maxValue = 6, Color? color}) : color = color ?? Colors.red;
-
-  void roll() {
-    value = Random().nextInt(maxValue) + 1;
-    tempValue = value;
-  }
-}
-
-class DiceWidget extends StatelessWidget {
-  final Dice dice;
-  final double size;
-  final Function(int) onMaxValueChanged;
-  final VoidCallback onRoll;
-
-  DiceWidget({
-  Key? key,
-  required this.dice,
-  required this.size,
-
-  required this.onMaxValueChanged,
-    required this.onRoll,
-  }) : super(key: key);
-
-  Color getTextColor(Color backgroundColor) {
-    double luminance = (0.299 * backgroundColor.red +
-        0.587 * backgroundColor.green +
-        0.114 * backgroundColor.blue) / 255;
-    return luminance > 0.5 ? Colors.black : Colors.white;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final textColor = getTextColor(dice.color);
-    return GestureDetector(
-      onTap: onRoll,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: dice.color,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              spreadRadius: 1,
-              blurRadius: 3,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Center(
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: Padding(
-                  padding: EdgeInsets.all(size * 0.1),
-                  child: Text(
-                    '${dice.tempValue}',
-                    style: TextStyle(
-                      fontSize: size * 0.5,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: DropdownButton<int>(
-                value: dice.maxValue,
-                items: [4, 6, 8, 10, 12, 20].map((int value) {
-                  return DropdownMenuItem<int>(
-                    value: value,
-                    child: Text('1-$value', style: TextStyle(color: textColor)),
-                  );
-                }).toList(),
-                onChanged: (int? newValue) {
-                  if (newValue != null) {
-                    onMaxValueChanged(newValue);
-                  }
-                },
-                dropdownColor: dice.color,
-                icon: Icon(Icons.arrow_drop_down, color: textColor),
-                underline: Container(height: 0),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
