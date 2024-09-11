@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:vector_math/vector_math_64.dart' as vector;
 
 void main() {
   runApp(MaterialApp(home: DiceApp()));
@@ -21,6 +20,7 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
   late AudioPlayer _audioPlayer;
   List<String> savedSets = [];
   FocusNode _focusNode = FocusNode();
+  bool showSum = false;
 
   @override
   void initState() {
@@ -244,122 +244,129 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     saveDices();
   }
 
+  int calculateSum() {
+    return dices.fold(0, (sum, dice) => sum + dice.value);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: RawKeyboardListener(
-        focusNode: _focusNode,
-        onKey: (RawKeyEvent event) {
-          if (event is RawKeyDownEvent &&
-              (event.logicalKey == LogicalKeyboardKey.enter ||
-                  event.logicalKey == LogicalKeyboardKey.space)) {
-            rollAllDices();
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Colors.white, Color(0xFFE8F5E9)],
+          focusNode: _focusNode,
+          onKey: (RawKeyEvent event) {
+            if (event is RawKeyDownEvent &&
+                (event.logicalKey == LogicalKeyboardKey.enter ||
+                    event.logicalKey == LogicalKeyboardKey.space)) {
+              rollAllDices();
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFE8F5E9), Colors.white],
+              ),
             ),
-          ),
-          child: Stack(
+            child: Stack(
+              children: [
+            Column(
             children: [
-              Column(
-                children: [
-                  AppBar(
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    title: Text('주사위 앱', style: TextStyle(color: Colors.black)),
-                    actions: [
-                      IconButton(
-                        icon: Icon(Icons.save, color: Colors.black),
-                        onPressed: saveCurrentSet,
-                      ),
-                      IconButton(
-                        icon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add, size: 32, color: Colors.black),
-                            Icon(Icons.casino, size: 32, color: Colors.black),
-                          ],
-                        ),
-                        onPressed: addDice,
-                        iconSize: 48,
-                      ),
-                      IconButton(
-                        icon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.remove, size: 32, color: Colors.black),
-                            Icon(Icons.casino, size: 32, color: Colors.black),
-                          ],
-                        ),
-                        onPressed: removeDice,
-                        iconSize: 48,
-                      ),
+            AppBar(
+            backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: Text('모두의 주사위', style: TextStyle(color: Colors.black)),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.save, color: Colors.black),
+                  onPressed: saveCurrentSet,
+                ),
+                IconButton(
+                  icon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 32, color: Colors.black),
+                      Icon(Icons.casino, size: 32, color: Colors.black),
                     ],
                   ),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        int crossAxisCount = 1;
-                        if (dices.length > 1) crossAxisCount = 2;
-                        if (dices.length > 4) crossAxisCount = 3;
+                  onPressed: addDice,
+                  iconSize: 48,
+                ),
+                IconButton(
+                  icon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.remove, size: 32, color: Colors.black),
+                      Icon(Icons.casino, size: 32, color: Colors.black),
+                    ],
+                  ),
+                  onPressed: removeDice,
+                  iconSize: 48,
+                ),
+              ],
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  int crossAxisCount = 1;
+                  if (dices.length > 1) crossAxisCount = 2;
+                  if (dices.length > 4) crossAxisCount = 3;
 
-                        double availableWidth = constraints.maxWidth - (crossAxisCount + 1) * 8.0;
-                        double availableHeight = constraints.maxHeight - 80;
-                        double diceSize = (availableWidth / crossAxisCount).floorToDouble() * 0.8;
+                  double availableWidth = constraints.maxWidth - (crossAxisCount + 1) * 8.0;
+                  double availableHeight = constraints.maxHeight - 80;
+                  double diceSize = (availableWidth / crossAxisCount).floorToDouble() * 0.8;
 
-                        if (diceSize * ((dices.length / crossAxisCount).ceil()) > availableHeight) {
-                          diceSize = (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble() * 0.8;
-                        }
+                  if (diceSize * ((dices.length / crossAxisCount).ceil()) > availableHeight) {
+                    diceSize = (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble() * 0.8;
+                  }
 
-                        return Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: AnimatedReorderableWrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: dices.asMap().entries.map((entry) {
-                              int index = entry.key;
-                              Dice dice = entry.value;
-                              return DiceWidget3D(
-                                key: ValueKey(dice),
-                                dice: dice,
-                                size: diceSize,
-                                onMaxValueChanged: (newValue) {
-                                  setState(() {
-                                    dice.maxValue = newValue;
-                                  });
-                                  saveDices();
-                                },
-                                onRoll: () => rollDice(dice),
-                              );
-                            }).toList(),
-                            onReorder: (int oldIndex, int newIndex) {
-                              setState(() {
-                                if (newIndex > oldIndex) {
-                                  newIndex -= 1;
-                                }
-                                final Dice item = dices.removeAt(oldIndex);
-                                dices.insert(newIndex, item);
-                              });
-                              saveDices();
-                            },
-                          ),
+                  return Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: AnimatedReorderableWrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: dices.asMap().entries.map((entry) {
+                        int index = entry.key;
+                        Dice dice = entry.value;
+                        return DiceWidget(
+                          key: ValueKey(dice),
+                          dice: dice,
+                          size: diceSize,
+                          onMaxValueChanged: (newValue) {
+                            setState(() {
+                              dice.maxValue = newValue;
+                            });
+                            saveDices();
+                          },
+                          onRoll: () => rollDice(dice),
                         );
+                      }).toList(),
+                      onReorder: (int oldIndex, int newIndex) {
+                        setState(() {
+                          if (newIndex > oldIndex) {
+                            newIndex -= 1;
+                          }
+                          final Dice item = dices.removeAt(oldIndex);
+                          dices.insert(newIndex, item);
+                        });
+                        saveDices();
                       },
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 16,
-                child: Center(
-                  child: ElevatedButton(
+            ),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 16,
+            child: Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
                     onPressed: rollAllDices,
                     child: Text(
                       '모든 주사위 굴리기',
@@ -374,38 +381,78 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
                       padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                     ),
                   ),
-                ),
-              ),
-              Positioned(
-                right: 16,
-                bottom: 16,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: DropdownButton<String>(
-                    hint: Text('저장된 Set 불러오기'),
-                    items: savedSets.map((String setJson) {
-                      Map<String, dynamic> set = jsonDecode(setJson);
-                      return DropdownMenuItem<String>(
-                        value: setJson,
-                        child: Text(set['name']),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        loadSet(newValue);
-                      }
+                  SizedBox(width: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        showSum = !showSum;
+                      });
                     },
-                    underline: Container(),
+                    child: Text(
+                      '주사위 합',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: showSum ? Colors.green : Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
+          ),
+          if (showSum)
+      Positioned(
+      left: 0,
+      right: 0,
+      bottom: 80,
+      child: Center(
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '주사위 합: ${calculateSum()}',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
         ),
+      ),
+    ),
+    Positioned(
+    right: 16,
+    bottom: 80,
+    child: Container(
+    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+    color: Colors.blue.withOpacity(0.2),
+    borderRadius: BorderRadius.circular(8),
+    ),
+    child: DropdownButton<String>(
+    hint: Text('저장된 Set 불러오기'),
+    items: savedSets.map((String setJson) {
+    Map<String, dynamic> set = jsonDecode(setJson);
+    return DropdownMenuItem<String>(
+    value: setJson,
+    child: Text(set['name']),
+    );
+    }).toList(),
+    onChanged: (String? newValue) {if (newValue != null) {
+      loadSet(newValue);
+    }
+    },
+      underline: Container(),
+    ),
+    ),
+    ),
+              ],
+            ),
+          ),
       ),
     );
   }
@@ -430,13 +477,13 @@ class Dice {
   }
 }
 
-class DiceWidget3D extends StatelessWidget {
+class DiceWidget extends StatelessWidget {
   final Dice dice;
   final double size;
   final Function(int) onMaxValueChanged;
   final VoidCallback onRoll;
 
-  DiceWidget3D({
+  DiceWidget({
     Key? key,
     required this.dice,
     required this.size,
@@ -455,31 +502,37 @@ class DiceWidget3D extends StatelessWidget {
             builder: (context, child) {
               return Transform(
                 transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.001) // 원근감 추가
+                  ..setEntry(3, 2, 0.001)
                   ..rotateX(dice.controller.value * 2 * pi)
                   ..rotateY(dice.controller.value * 2 * pi)
                   ..rotateZ(dice.controller.value * 2 * pi),
                 alignment: Alignment.center,
                 child: CustomPaint(
-                  size: Size(size, size),
                   painter: DicePainter(
                     dice: dice,
                     textColor: getTextColor(dice.color),
+                  ),
+                  size: Size(size, size),
+                ),
+              );
+            },
           ),
         ),
-      );
-        },
-        ),
-        ),
-          Positioned(
-            right: 0,
-            top: 0,
+        Positioned(
+          right: 0,
+          top: 0,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: DropdownButton<int>(
               value: dice.maxValue,
               items: [4, 6, 8, 10, 12, 20].map((int value) {
                 return DropdownMenuItem<int>(
                   value: value,
-                  child: Text('$value'),
+                  child: Text('$value', style: TextStyle(color: Colors.black)),
                 );
               }).toList(),
               onChanged: (int? newValue) {
@@ -487,12 +540,12 @@ class DiceWidget3D extends StatelessWidget {
                   onMaxValueChanged(newValue);
                 }
               },
-              dropdownColor: dice.color,
-              style: TextStyle(color: getTextColor(dice.color)),
               underline: Container(),
+              icon: Icon(Icons.arrow_drop_down, color: Colors.black),
             ),
           ),
-        ],
+        ),
+      ],
     );
   }
 
@@ -558,6 +611,17 @@ class DicePainter extends CustomPainter {
     textPainter.paint(canvas, Offset(size.width / 2 - textPainter.width / 2, size.height / 2 - textPainter.height / 2));
   }
 
+  void _drawTetrahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
+    final path = Path()
+      ..moveTo(size.width * 0.5, size.height * 0.2)
+      ..lineTo(size.width * 0.2, size.height * 0.8)
+      ..lineTo(size.width * 0.8, size.height * 0.8)
+      ..close();
+
+    canvas.drawPath(path, paint);
+    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
+  }
+
   void _drawCube(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
     final path = Path()
       ..moveTo(size.width * 0.2, size.height * 0.2)
@@ -567,34 +631,7 @@ class DicePainter extends CustomPainter {
       ..close();
 
     canvas.drawPath(path, paint);
-
-    canvas.drawPath(
-      path.shift(Offset(size.width * 0.1, size.height * 0.1)),
-      shadowPaint,
-    );
-
-    canvas.save();
-    canvas.transform((Matrix4.identity()..rotateZ(-pi / 4)).storage);
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width * 0.2, size.height),
-      shadowPaint,
-    );
-    canvas.restore();
-  }
-
-  void _drawTetrahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
-    final path = Path()
-      ..moveTo(size.width * 0.5, size.height * 0.2)
-      ..lineTo(size.width * 0.2, size.height * 0.8)
-      ..lineTo(size.width * 0.8, size.height * 0.8)
-      ..close();
-
-    canvas.drawPath(path, paint);
-
-    canvas.drawPath(
-      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
-      shadowPaint,
-    );
+    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
   }
 
   void _drawOctahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -606,11 +643,7 @@ class DicePainter extends CustomPainter {
       ..close();
 
     canvas.drawPath(path, paint);
-
-    canvas.drawPath(
-      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
-      shadowPaint,
-    );
+    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
   }
 
   void _drawDecahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -624,11 +657,7 @@ class DicePainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-
-    canvas.drawPath(
-      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
-      shadowPaint,
-    );
+    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
   }
 
   void _drawDodecahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -642,11 +671,7 @@ class DicePainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-
-    canvas.drawPath(
-      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
-      shadowPaint,
-    );
+    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
   }
 
   void _drawIcosahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -660,11 +685,7 @@ class DicePainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-
-    canvas.drawPath(
-      path.shift(Offset(size.width * 0.05, size.height * 0.05)),
-      shadowPaint,
-    );
+    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
   }
 
   @override
