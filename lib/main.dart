@@ -109,32 +109,28 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> rollAllDices() async {
-    List<Future> rollFutures = [];
-    for (var dice in dices) {
-      rollFutures.add(rollDice(dice));
-    }
-    await Future.wait(rollFutures);
-  }
-
   Future<void> rollDice(Dice dice) async {
     dice.controller.reset();
     dice.controller.forward();
 
     await _audioPlayer.stop();
     await _audioPlayer.seek(Duration.zero);
-    await _audioPlayer.play();
+    _audioPlayer.play();  // await 제거
 
     for (int i = 0; i < 10; i++) {
+      dice.tempValue = random.nextInt(dice.maxValue) + 1;
+      setState(() {});  // 각 변경마다 setState 호출
       await Future.delayed(Duration(milliseconds: 50));
-      setState(() {
-        dice.tempValue = random.nextInt(dice.maxValue) + 1;
-      });
     }
 
     setState(() {
       dice.roll();
     });
+  }
+
+  Future<void> rollAllDices() async {
+    List<Future> rollFutures = dices.map((dice) => rollDice(dice)).toList();
+    await Future.wait(rollFutures);
   }
 
   Color getRandomColor() {
@@ -144,6 +140,10 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
       random.nextInt(256),
       random.nextInt(256),
     );
+  }
+
+  int calculateSum() {
+    return dices.fold(0, (sum, dice) => sum + dice.value);
   }
 
   Future<void> saveCurrentSet() async {
@@ -242,10 +242,6 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
       )).toList();
     });
     saveDices();
-  }
-
-  int calculateSum() {
-    return dices.fold(0, (sum, dice) => sum + dice.value);
   }
 
   @override
@@ -442,8 +438,9 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     child: Text(set['name']),
     );
     }).toList(),
-    onChanged: (String? newValue) {if (newValue != null) {
-      loadSet(newValue);
+    onChanged: (String? newValue) {
+    if (newValue != null) {
+    loadSet(newValue);
     }
     },
       underline: Container(),
@@ -469,7 +466,9 @@ class Dice {
     this.maxValue = 6,
     Color? color,
     required this.controller,
-  }) : color = color ?? Colors.red;
+  }) : color = color ?? Colors.red {
+    tempValue = value;
+  }
 
   void roll() {
     value = Random().nextInt(maxValue) + 1;
@@ -510,7 +509,8 @@ class DiceWidget extends StatelessWidget {
                 child: CustomPaint(
                   painter: DicePainter(
                     dice: dice,
-                    textColor: getTextColor(dice.color),
+                    textColor: Colors.black,
+                    shapeSizeRatio: 0.8,
                   ),
                   size: Size(size, size),
                 ),
@@ -522,17 +522,31 @@ class DiceWidget extends StatelessWidget {
           right: 0,
           top: 0,
           child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            padding: EdgeInsets.only(top: 4, right: 4),
             child: DropdownButton<int>(
               value: dice.maxValue,
               items: [4, 6, 8, 10, 12, 20].map((int value) {
                 return DropdownMenuItem<int>(
                   value: value,
-                  child: Text('$value', style: TextStyle(color: Colors.black)),
+                  child: Text('$value',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      shadows: [
+                        Shadow(
+                          blurRadius: 2.0,
+                          color: Colors.white,
+                          offset: Offset(1.0, 1.0),
+                        ),
+                        Shadow(
+                          blurRadius: 2.0,
+                          color: Colors.white,
+                          offset: Offset(-1.0, -1.0),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               }).toList(),
               onChanged: (int? newValue) {
@@ -541,27 +555,30 @@ class DiceWidget extends StatelessWidget {
                 }
               },
               underline: Container(),
-              icon: Icon(Icons.arrow_drop_down, color: Colors.black),
+              icon: Icon(
+                Icons.arrow_drop_down,
+                color: Colors.black,
+                size: 24,
+              ),
+              dropdownColor: Colors.white.withOpacity(0.9),
             ),
           ),
         ),
       ],
     );
   }
-
-  Color getTextColor(Color backgroundColor) {
-    double luminance = (0.299 * backgroundColor.red +
-        0.587 * backgroundColor.green +
-        0.114 * backgroundColor.blue) / 255;
-    return luminance > 0.5 ? Colors.black : Colors.white;
-  }
 }
 
 class DicePainter extends CustomPainter {
   final Dice dice;
   final Color textColor;
+  final double shapeSizeRatio;
 
-  DicePainter({required this.dice, required this.textColor});
+  DicePainter({
+    required this.dice,
+    required this.textColor,
+    this.shapeSizeRatio = 0.8
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -570,30 +587,36 @@ class DicePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.3)
+      ..color = Colors.black.withOpacity(0.1)
       ..style = PaintingStyle.fill;
+
+    final shapeSize = Size(size.width * shapeSizeRatio, size.height * shapeSizeRatio);
+    final offsetX = (size.width - shapeSize.width) / 2;
+    final offsetY = (size.height - shapeSize.height) / 2;
+
+    canvas.translate(offsetX, offsetY);
 
     switch (dice.maxValue) {
       case 4:
-        _drawTetrahedron(canvas, size, paint, shadowPaint);
+        _drawTetrahedron(canvas, shapeSize, paint, shadowPaint);
         break;
       case 6:
-        _drawCube(canvas, size, paint, shadowPaint);
+        _drawCube(canvas, shapeSize, paint, shadowPaint);
         break;
       case 8:
-        _drawOctahedron(canvas, size, paint, shadowPaint);
+        _drawOctahedron(canvas, shapeSize, paint, shadowPaint);
         break;
       case 10:
-        _drawDecahedron(canvas, size, paint, shadowPaint);
+        _drawDecahedron(canvas, shapeSize, paint, shadowPaint);
         break;
       case 12:
-        _drawDodecahedron(canvas, size, paint, shadowPaint);
+        _drawDodecahedron(canvas, shapeSize, paint, shadowPaint);
         break;
       case 20:
-        _drawIcosahedron(canvas, size, paint, shadowPaint);
+        _drawIcosahedron(canvas, shapeSize, paint, shadowPaint);
         break;
       default:
-        _drawCube(canvas, size, paint, shadowPaint);
+        _drawCube(canvas, shapeSize, paint, shadowPaint);
     }
 
     final textPainter = TextPainter(
@@ -601,14 +624,14 @@ class DicePainter extends CustomPainter {
         text: dice.tempValue.toString(),
         style: TextStyle(
           color: textColor,
-          fontSize: size.width * 0.4,
+          fontSize: shapeSize.width * 0.4,
           fontWeight: FontWeight.bold,
         ),
       ),
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
-    textPainter.paint(canvas, Offset(size.width / 2 - textPainter.width / 2, size.height / 2 - textPainter.height / 2));
+    textPainter.paint(canvas, Offset(shapeSize.width / 2 - textPainter.width / 2, shapeSize.height / 2 - textPainter.height / 2));
   }
 
   void _drawTetrahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -619,7 +642,7 @@ class DicePainter extends CustomPainter {
       ..close();
 
     canvas.drawPath(path, paint);
-    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
+    canvas.drawPath(path.shift(Offset(size.width * 0.02, size.height * 0.02)), shadowPaint);
   }
 
   void _drawCube(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -631,7 +654,7 @@ class DicePainter extends CustomPainter {
       ..close();
 
     canvas.drawPath(path, paint);
-    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
+    canvas.drawPath(path.shift(Offset(size.width * 0.02, size.height * 0.02)), shadowPaint);
   }
 
   void _drawOctahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -643,7 +666,7 @@ class DicePainter extends CustomPainter {
       ..close();
 
     canvas.drawPath(path, paint);
-    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
+    canvas.drawPath(path.shift(Offset(size.width * 0.02, size.height * 0.02)), shadowPaint);
   }
 
   void _drawDecahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -657,7 +680,7 @@ class DicePainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
+    canvas.drawPath(path.shift(Offset(size.width * 0.02, size.height * 0.02)), shadowPaint);
   }
 
   void _drawDodecahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -671,7 +694,7 @@ class DicePainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
+    canvas.drawPath(path.shift(Offset(size.width * 0.02, size.height * 0.02)), shadowPaint);
   }
 
   void _drawIcosahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -685,7 +708,7 @@ class DicePainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, paint);
-    canvas.drawPath(path.shift(Offset(size.width * 0.05, size.height * 0.05)), shadowPaint);
+    canvas.drawPath(path.shift(Offset(size.width * 0.02, size.height * 0.02)), shadowPaint);
   }
 
   @override
