@@ -115,11 +115,11 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
 
     await _audioPlayer.stop();
     await _audioPlayer.seek(Duration.zero);
-    _audioPlayer.play();  // await 제거
+    _audioPlayer.play();
 
     for (int i = 0; i < 10; i++) {
       dice.tempValue = random.nextInt(dice.maxValue) + 1;
-      setState(() {});  // 각 변경마다 setState 호출
+      setState(() {});
       await Future.delayed(Duration(milliseconds: 50));
     }
 
@@ -247,7 +247,7 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: RawKeyboardListener(
+        body: RawKeyboardListener(
           focusNode: _focusNode,
           onKey: (RawKeyEvent event) {
             if (event is RawKeyDownEvent &&
@@ -261,148 +261,145 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFFE8F5E9), Colors.white],
+                colors: [Color(0xFFBBF7D0), Color(0xFFFFFFFF)],
               ),
             ),
             child: Stack(
-              children: [
+            children: [
             Column(
             children: [
             AppBar(
             backgroundColor: Colors.transparent,
-              elevation: 0,
-              title: Text('모두의 주사위', style: TextStyle(color: Colors.black)),
-              actions: [
-                IconButton(
-                  icon: Icon(Icons.save, color: Colors.black),
-                  onPressed: saveCurrentSet,
-                ),
-                IconButton(
-                  icon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 32, color: Colors.black),
-                      Icon(Icons.casino, size: 32, color: Colors.black),
-                    ],
-                  ),
-                  onPressed: addDice,
-                  iconSize: 48,
-                ),
-                IconButton(
-                  icon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.remove, size: 32, color: Colors.black),
-                      Icon(Icons.casino, size: 32, color: Colors.black),
-                    ],
-                  ),
-                  onPressed: removeDice,
-                  iconSize: 48,
-                ),
-              ],
-            ),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  int crossAxisCount = 1;
-                  if (dices.length > 1) crossAxisCount = 2;
-                  if (dices.length > 4) crossAxisCount = 3;
-
-                  double availableWidth = constraints.maxWidth - (crossAxisCount + 1) * 8.0;
-                  double availableHeight = constraints.maxHeight - 80;
-                  double diceSize = (availableWidth / crossAxisCount).floorToDouble() * 0.8;
-
-                  if (diceSize * ((dices.length / crossAxisCount).ceil()) > availableHeight) {
-                    diceSize = (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble() * 0.8;
-                  }
-
-                  return Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: AnimatedReorderableWrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: dices.asMap().entries.map((entry) {
-                        int index = entry.key;
-                        Dice dice = entry.value;
-                        return DiceWidget(
-                          key: ValueKey(dice),
-                          dice: dice,
-                          size: diceSize,
-                          onMaxValueChanged: (newValue) {
-                            setState(() {
-                              dice.maxValue = newValue;
-                            });
-                            saveDices();
-                          },
-                          onRoll: () => rollDice(dice),
-                        );
-                      }).toList(),
-                      onReorder: (int oldIndex, int newIndex) {
-                        setState(() {
-                          if (newIndex > oldIndex) {
-                            newIndex -= 1;
-                          }
-                          final Dice item = dices.removeAt(oldIndex);
-                          dices.insert(newIndex, item);
-                        });
-                        saveDices();
-                      },
-                    ),
-                  );
-                },
+            elevation: 0,
+            title: Text('모두의 주사위', style: TextStyle(color: Colors.black)),
+            actions: [
+              IconButton(
+                icon: Icon(Icons.save, color: Colors.black),
+                onPressed: saveCurrentSet,
               ),
-            ),
+              IconButton(
+                icon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 32, color: Colors.black),
+                    Icon(Icons.casino, size: 32, color: Colors.black),
+                  ],
+                ),
+                onPressed: addDice,
+                iconSize: 48,
+              ),
+              IconButton(
+                icon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.remove, size: 32, color: Colors.black),
+                    Icon(Icons.casino, size: 32, color: Colors.black),
+                  ],
+                ),
+                onPressed: removeDice,
+                iconSize: 48,
+              ),
             ],
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 16,
-            child: Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: rollAllDices,
-                    child: Text(
-                      '모든 주사위 굴리기',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: () {
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                int crossAxisCount = 1;
+                if (dices.length > 1) crossAxisCount = 2;
+                if (dices.length > 4) crossAxisCount = 3;
+
+                double availableWidth = constraints.maxWidth - (crossAxisCount + 1) * 8.0;
+                double availableHeight = constraints.maxHeight - 80;
+                double diceSize = (availableWidth / crossAxisCount).floorToDouble() * 0.8;
+
+                if (diceSize * ((dices.length / crossAxisCount).ceil()) > availableHeight) {
+                  diceSize = (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble() * 0.8;
+                }
+
+                return Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: AnimatedReorderableWrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: dices.asMap().entries.map((entry) {
+                      int index = entry.key;
+                      Dice dice = entry.value;
+                      return DiceWidget(
+                        key: ValueKey(dice),
+                        dice: dice,
+                        size: diceSize,
+                        onMaxValueChanged: (newValue) {
+                          setState(() {
+                            dice.maxValue = newValue;
+                          });
+                          saveDices();
+                        },
+                        onRoll: () => rollDice(dice),
+                      );
+                    }).toList(),
+                    onReorder: (int oldIndex, int newIndex) {
                       setState(() {
-                        showSum = !showSum;
+                        if (newIndex > oldIndex) {
+                          newIndex -= 1;
+                        }
+                        final Dice item = dices.removeAt(oldIndex);
+                        dices.insert(newIndex, item);
                       });
+                      saveDices();
                     },
-                    child: Text(
-                      '주사위 합',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: showSum ? Colors.green : Colors.blue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-          if (showSum)
-      Positioned(
+          ],
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 16,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ElevatedButton(
+                onPressed: rollAllDices,
+                child: Text(
+                  '모든 주사위 굴리기',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    showSum = !showSum;
+                  });
+                },
+                child: Text(
+                  '주사위 합',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: showSum ? Colors.green : Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (showSum)
+    Positioned(
       left: 0,
       right: 0,
       bottom: 80,
@@ -443,15 +440,14 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     loadSet(newValue);
     }
     },
-      underline: Container(),
+    underline: Container(),
     ),
     ),
     ),
-              ],
-            ),
-          ),
-      ),
-    );
+    ],
+    ),
+    ),
+    ));
   }
 }
 
@@ -509,7 +505,6 @@ class DiceWidget extends StatelessWidget {
                 child: CustomPaint(
                   painter: DicePainter(
                     dice: dice,
-                    textColor: Colors.black,
                     shapeSizeRatio: 0.8,
                   ),
                   size: Size(size, size),
@@ -571,12 +566,10 @@ class DiceWidget extends StatelessWidget {
 
 class DicePainter extends CustomPainter {
   final Dice dice;
-  final Color textColor;
   final double shapeSizeRatio;
 
   DicePainter({
     required this.dice,
-    required this.textColor,
     this.shapeSizeRatio = 0.8
   });
 
@@ -619,6 +612,7 @@ class DicePainter extends CustomPainter {
         _drawCube(canvas, shapeSize, paint, shadowPaint);
     }
 
+    final textColor = _getContrastColor(dice.color);
     final textPainter = TextPainter(
       text: TextSpan(
         text: dice.tempValue.toString(),
@@ -631,7 +625,18 @@ class DicePainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
-    textPainter.paint(canvas, Offset(shapeSize.width / 2 - textPainter.width / 2, shapeSize.height / 2 - textPainter.height / 2));
+
+    if (dice.maxValue == 4) {
+      textPainter.paint(canvas, Offset(
+          shapeSize.width / 2 - textPainter.width / 2,
+          shapeSize.height * 0.55 - textPainter.height / 2
+      ));
+    } else {
+      textPainter.paint(canvas, Offset(
+          shapeSize.width / 2 - textPainter.width / 2,
+          shapeSize.height / 2 - textPainter.height / 2
+      ));
+    }
   }
 
   void _drawTetrahedron(Canvas canvas, Size size, Paint paint, Paint shadowPaint) {
@@ -709,6 +714,13 @@ class DicePainter extends CustomPainter {
 
     canvas.drawPath(path, paint);
     canvas.drawPath(path.shift(Offset(size.width * 0.02, size.height * 0.02)), shadowPaint);
+  }
+
+  Color _getContrastColor(Color backgroundColor) {
+    double luminance = (0.299 * backgroundColor.red +
+        0.587 * backgroundColor.green +
+        0.114 * backgroundColor.blue) / 255;
+    return luminance > 0.5 ? Colors.black : Colors.white;
   }
 
   @override
