@@ -354,50 +354,51 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
           ),
           ],
         ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 16,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              ElevatedButton(
-                onPressed: rollAllDices,
-                child: Text(
-                  '모든 주사위 굴리기',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 16,
+                child: Center(
+                  child: ElevatedButton(
+                    onPressed: rollAllDices,
+                    child: Text(
+                      '모든 주사위 굴리기',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    ),
                   ),
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 ),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    showSum = !showSum;
-                  });
-                },
-                child: Text(
-                  '주사위 합',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: showSum ? Colors.green : Colors.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      showSum = !showSum;
+                    });
+                  },
+                  child: Text(
+                    '주사위 합',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: showSum ? Colors.green : Colors.blue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
         if (showSum)
     Positioned(
       left: 0,
