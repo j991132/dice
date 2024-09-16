@@ -1,18 +1,72 @@
+// import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'dart:math';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 void main() {
-  runApp(MaterialApp(home: DiceApp()));
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: '모두의 주사위',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const DiceApp(),
+    );
+  }
 }
 
 class DiceApp extends StatefulWidget {
+  const DiceApp({Key? key}) : super(key: key);
+
   @override
   _DiceAppState createState() => _DiceAppState();
 }
+//광고클래스 시작
+class AdMobService {
+  static String? get bannerAdUnitId {
+    if (kIsWeb) return null;
+    if (Platform.isAndroid) {
+      // return 'ca-app-pub-3940256099942544/6300978111';    //테스트코드
+      return 'ca-app-pub-5169932997978928/5178049992';
+    } else if (Platform.isIOS) {
+      return 'ca-app-pub-3940256099942544/2934735716';
+    }
+    return null;
+  }
+  //전면 광고
+  static String? get interstitialAdUnitId {
+    if (Platform.isAndroid) {
+      // return 'ca-app-pub-3940256099942544/1033173712';    //테스트코드
+      return 'ca-app-pub-5169932997978928/1238804983';
+    } else if (Platform.isIOS) {
+      return 'ca-app-pub-3940256099942544/4411468910';
+    }
+    return null;
+  }
+  static final BannerAdListener bannerAdListener = BannerAdListener(
+    onAdLoaded: (ad) => debugPrint('Ad loaded'),
+    onAdFailedToLoad: (ad, error) {
+      ad.dispose();
+      debugPrint('Ad fail to load: $error');
+      },
+    onAdOpened: (ad) => debugPrint('Ad opened'),
+    onAdClosed: (ad) => debugPrint('Ad closed'),
+  );
+} //광고클래스 끝
 
 class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
   late List<Dice> dices;
@@ -21,10 +75,16 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
   List<String> savedSets = [];
   FocusNode _focusNode = FocusNode();
   bool showSum = false;
+  BannerAd? _bannerAd;
+  InterstitialAd? _interstitialAd;
 
   @override
   void initState() {
     super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
     dices = [
       Dice(
         controller: AnimationController(
@@ -36,9 +96,42 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     loadDices();
     loadSavedSets();
     _audioPlayer = AudioPlayer();
-    _loadAudio();
+    await _loadAudio();
     _focusNode.requestFocus();
+
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await MobileAds.instance.initialize();
+      _createBannerAd();
+      _createInterstitialAd();
+    }
   }
+
+  //배너 광고 생성
+  void _createBannerAd() {
+
+      _bannerAd = BannerAd(
+        size: AdSize.fullBanner, //배너 사이즈
+        adUnitId: AdMobService.bannerAdUnitId!, //광고ID 등록
+        listener: AdMobService.bannerAdListener, //리스너 등록
+        request: const AdRequest(),
+      )
+        ..load();
+
+  }
+//전면 광고 생성
+  void _createInterstitialAd() {
+
+      InterstitialAd.load(
+        adUnitId: AdMobService.interstitialAdUnitId!,
+        request: const AdRequest(),
+        adLoadCallback: InterstitialAdLoadCallback(
+          onAdLoaded: (ad) => _interstitialAd = ad,
+          onAdFailedToLoad: (error) => _interstitialAd = null,
+        ),
+      );
+
+  }
+
 
   Future<void> _loadAudio() async {
     await _audioPlayer.setAsset('assets/dice_roll.mp3');
@@ -222,7 +315,24 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
         savedSets = sets;
       });
     }
+    _showInterstitialAd();
   }
+  void _showInterstitialAd() {
+    if (_interstitialAd != null) {
+      _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          _createInterstitialAd();
+          },
+      );
+      _interstitialAd!.show();
+      _interstitialAd = null;
+    }
+  }
+
 
   void loadSet(String setJson) {
     Map<String, dynamic> set = jsonDecode(setJson);
@@ -448,7 +558,17 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
     ],
     ),
     ),
-    ));
+    ),
+//화면의 하단에 배너 노출
+      bottomNavigationBar: !kIsWeb && _bannerAd != null
+          ? Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        height: 50,
+        child: AdWidget(ad: _bannerAd!),
+      )
+          : null,
+
+    );
   }
 }
 
