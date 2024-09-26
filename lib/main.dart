@@ -11,6 +11,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // 시작: 화면 켜짐 상태 유지
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
+  // 끝: 화면 켜짐 상태 유지
   runApp(const MyApp());
 }
 
@@ -420,7 +423,7 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
 
                 double availableWidth = constraints.maxWidth - (crossAxisCount + 1) * 8.0;
                 double availableHeight = constraints.maxHeight - 80;
-                double diceSize = (availableWidth / crossAxisCount).floorToDouble() * 0.8;
+                double diceSize = min((availableWidth / crossAxisCount).floorToDouble(), (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble()) * 0.9;
 
                 if (diceSize * ((dices.length / crossAxisCount).ceil()) > availableHeight) {
                   diceSize = (availableHeight / ((dices.length / crossAxisCount).ceil())).floorToDouble() * 0.8;
@@ -469,51 +472,72 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
                 right: 0,
                 bottom: 16,
                 child: Center(
-                  child: ElevatedButton(
-                    onPressed: rollAllDices,
-                    child: Text(
-                      '모든 주사위 굴리기',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Container(
+                        constraints: BoxConstraints(
+                          maxWidth: 200,
+                          maxHeight: 48,
+                        ),
+                        child: ElevatedButton(
+                          onPressed: rollAllDices,
+                          child: Text(
+                            '모든 주사위 굴리기',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
               Positioned(
                 right: 16,
                 bottom: 16,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      showSum = !showSum;
-                    });
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Container(
+                      width: 80,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            showSum = !showSum;
+                          });
+                        },
+                        child: Text(
+                          '주사위 합',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15, // 텍스트 크기 증가
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: showSum ? Colors.green : Colors.blue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: EdgeInsets.zero, // 패딩 제거로 텍스트 크기 최대화
+                        ),
+                      ),
+                    );
                   },
-                  child: Text(
-                    '주사위 합',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: showSum ? Colors.green : Colors.blue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  ),
                 ),
               ),
-        if (showSum)
-    Positioned(
+            if (showSum)
+        Positioned(
       left: 0,
       right: 0,
-      bottom: 80,
+      bottom: 200,
       child: Center(
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -522,39 +546,54 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            '주사위 합: ${calculateSum()}',
+            '합: ${calculateSum()}',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
         ),
       ),
     ),
-    Positioned(
-    right: 16,
-    bottom: 80,
-    child: Container(
-    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(
-    color: Colors.blue.withOpacity(0.2),
-    borderRadius: BorderRadius.circular(8),
-    ),
-    child: DropdownButton<String>(
-    hint: Text('저장된 Set 불러오기'),
-    items: savedSets.map((String setJson) {
-    Map<String, dynamic> set = jsonDecode(setJson);
-    return DropdownMenuItem<String>(
-    value: setJson,
-    child: Text(set['name']),
-    );
-    }).toList(),
-    onChanged: (String? newValue) {
-    if (newValue != null) {
-    loadSet(newValue);
-    }
-    },
-    underline: Container(),
-    ),
-    ),
-    ),
+              Positioned(
+                right: 16,
+                bottom: 72,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Container(
+                      width: min(200, constraints.maxWidth * 0.4),
+                      height: min(48, constraints.maxHeight * 0.08),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          hint: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('저장된 Set 불러오기'),
+                          ),
+                          items: savedSets.map((String setJson) {
+                            Map<String, dynamic> set = jsonDecode(setJson);
+                            return DropdownMenuItem<String>(
+                              value: setJson,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(set['name']),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            if (newValue != null) {
+                              loadSet(newValue);
+                            }
+                          },
+                          underline: Container(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
     ],
     ),
     ),
