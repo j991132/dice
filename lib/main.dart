@@ -467,6 +467,7 @@ class _DiceAppState extends State<DiceApp> with TickerProviderStateMixin {
           ),
           ],
         ),
+              //주사위 버튼 배치부분
               Positioned(
                 left: 0,
                 right: 0,
